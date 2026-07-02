@@ -19,11 +19,150 @@
         android:id="@+id/statusText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="12dp"
         android:background="#80000000"
         android:padding="8dp"
-        android:text="Tiros: 0"
+        android:text="Calibre o alvo"
         android:textColor="#FFFFFF"
-        android:textSize="18sp" />
+        android:textSize="16sp" />
+
+    <LinearLayout
+        android:id="@+id/painelConfig"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="#B0000000"
+        android:padding="10dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="90dp"
+                android:layout_height="wrap_content"
+                android:text="Disparos:"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/btnDisparosMenos"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="-" />
+
+            <EditText
+                android:id="@+id/edtDisparos"
+                android:layout_width="70dp"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:text="10"
+                android:textColor="#FFFFFF"
+                android:gravity="center" />
+
+            <Button
+                android:id="@+id/btnDisparosMais"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="+" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="90dp"
+                android:layout_height="wrap_content"
+                android:text="Tempo (s):"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/btnTempoMenos"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="-" />
+
+            <EditText
+                android:id="@+id/edtTempo"
+                android:layout_width="70dp"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:text="0"
+                android:textColor="#FFFFFF"
+                android:gravity="center" />
+
+            <Button
+                android:id="@+id/btnTempoMais"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="+" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  0 = ilimitado"
+                android:textColor="#CCCCCC"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="6dp">
+
+            <Button
+                android:id="@+id/btnStart"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="START" />
+
+            <Button
+                android:id="@+id/btnPause"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="PAUSE"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/telaDestaque"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="#E6000000"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/txtDestaqueGrande"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#FFFFFF"
+            android:textSize="90sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/txtDestaqueDetalhe"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text=""
+            android:textColor="#FFDD55"
+            android:textSize="22sp"
+            android:gravity="center" />
+    </LinearLayout>
 
 </FrameLayout>
