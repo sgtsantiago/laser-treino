@@ -92,34 +92,35 @@ class MainActivity : AppCompatActivity() {
             )
 
             if (resultado != null) {
-                // ponto detectado no sistema da imagem de análise
-                val ponto = floatArrayOf(resultado.x.toFloat(), resultado.y.toFloat())
+                // guarda os dados necessários para transformar na thread principal
+                val px = resultado.x.toFloat()
+                val py = resultado.y.toFloat()
+                val origem = ImageProxyTransformFactory().getOutputTransform(imageProxy)
 
-                // transforma para o sistema do PreviewView (respeita rotação e corte)
-                val destino: OutputTransform? = previewView.outputTransform
-                if (destino != null) {
-                    val origem = ImageProxyTransformFactory().getOutputTransform(imageProxy)
-                    val transform = CoordinateTransform(origem, destino)
-                    transform.mapPoints(ponto)
-                }
+                runOnUiThread {
+                    val ponto = floatArrayOf(px, py)
+                    val destino: OutputTransform? = previewView.outputTransform
+                    if (destino != null) {
+                        val transform = CoordinateTransform(origem, destino)
+                        transform.mapPoints(ponto)
+                    }
 
-                val larguraView = previewView.width.toFloat().coerceAtLeast(1f)
-                val alturaView = previewView.height.toFloat().coerceAtLeast(1f)
-                val nx = (ponto[0] / larguraView).coerceIn(0f, 1f)
-                val ny = (ponto[1] / alturaView).coerceIn(0f, 1f)
+                    val larguraView = previewView.width.toFloat().coerceAtLeast(1f)
+                    val alturaView = previewView.height.toFloat().coerceAtLeast(1f)
+                    val nx = (ponto[0] / larguraView).coerceIn(0f, 1f)
+                    val ny = (ponto[1] / alturaView).coerceIn(0f, 1f)
 
-                val agora = System.currentTimeMillis()
-                val podeContar = !laserPresenteAntes && (agora - ultimoTiroMs > 300)
-                if (podeContar) {
-                    contadorTiros++
-                    ultimoTiroMs = agora
-                    runOnUiThread {
+                    val agora = System.currentTimeMillis()
+                    val podeContar = !laserPresenteAntes && (agora - ultimoTiroMs > 300)
+                    if (podeContar) {
+                        contadorTiros++
+                        ultimoTiroMs = agora
                         overlay.adicionarTiro(nx, ny)
                         atualizarStatus()
                     }
+                    laserPresenteAntes = true
+                    overlay.definirLaser(nx, ny)
                 }
-                laserPresenteAntes = true
-                runOnUiThread { overlay.definirLaser(nx, ny) }
             } else {
                 laserPresenteAntes = false
                 runOnUiThread { overlay.limparLaser() }
