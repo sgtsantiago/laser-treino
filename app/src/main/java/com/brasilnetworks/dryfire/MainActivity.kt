@@ -12,6 +12,10 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.camera.view.TransformExperimental
+import androidx.camera.view.transform.CoordinateTransform
+import androidx.camera.view.transform.ImageProxyTransformFactory
+import androidx.camera.view.transform.OutputTransform
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 
@@ -76,6 +80,7 @@ class MainActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    @androidx.annotation.OptIn(TransformExperimental::class)
     private fun processarFrame(imageProxy: ImageProxy) {
         try {
             val plane = imageProxy.planes[0]
@@ -87,15 +92,21 @@ class MainActivity : AppCompatActivity() {
             )
 
             if (resultado != null) {
-                val nx: Float
-                val ny: Float
-                val par = normalizar(
-                    resultado.x, resultado.y,
-                    imageProxy.width, imageProxy.height,
-                    imageProxy.imageInfo.rotationDegrees
-                )
-                nx = par.first
-                ny = par.second
+                // ponto detectado no sistema da imagem de análise
+                val ponto = floatArrayOf(resultado.x.toFloat(), resultado.y.toFloat())
+
+                // transforma para o sistema do PreviewView (respeita rotação e corte)
+                val destino: OutputTransform? = previewView.outputTransform
+                if (destino != null) {
+                    val origem = ImageProxyTransformFactory().getOutputTransform(imageProxy)
+                    val transform = CoordinateTransform(origem, destino)
+                    transform.mapPoints(ponto)
+                }
+
+                val larguraView = previewView.width.toFloat().coerceAtLeast(1f)
+                val alturaView = previewView.height.toFloat().coerceAtLeast(1f)
+                val nx = (ponto[0] / larguraView).coerceIn(0f, 1f)
+                val ny = (ponto[1] / alturaView).coerceIn(0f, 1f)
 
                 val agora = System.currentTimeMillis()
                 val podeContar = !laserPresenteAntes && (agora - ultimoTiroMs > 300)
@@ -115,17 +126,6 @@ class MainActivity : AppCompatActivity() {
             }
         } finally {
             imageProxy.close()
-        }
-    }
-
-    private fun normalizar(x: Int, y: Int, w: Int, h: Int, rot: Int): Pair<Float, Float> {
-        val fx = x.toFloat() / w
-        val fy = y.toFloat() / h
-        return when (rot) {
-            90 -> Pair(1f - fy, fx)
-            180 -> Pair(1f - fx, 1f - fy)
-            270 -> Pair(fy, 1f - fx)
-            else -> Pair(fx, fy)
         }
     }
 
