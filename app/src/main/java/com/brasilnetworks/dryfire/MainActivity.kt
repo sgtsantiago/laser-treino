@@ -87,11 +87,15 @@ class MainActivity : AppCompatActivity() {
             )
 
             if (resultado != null) {
-                val (nx, ny) = normalizar(
+                val nx: Float
+                val ny: Float
+                val par = normalizar(
                     resultado.x, resultado.y,
                     imageProxy.width, imageProxy.height,
                     imageProxy.imageInfo.rotationDegrees
                 )
+                nx = par.first
+                ny = par.second
 
                 val agora = System.currentTimeMillis()
                 val podeContar = !laserPresenteAntes && (agora - ultimoTiroMs > 300)
@@ -105,3 +109,32 @@ class MainActivity : AppCompatActivity() {
                 }
                 laserPresenteAntes = true
                 runOnUiThread { overlay.definirLaser(nx, ny) }
+            } else {
+                laserPresenteAntes = false
+                runOnUiThread { overlay.limparLaser() }
+            }
+        } finally {
+            imageProxy.close()
+        }
+    }
+
+    private fun normalizar(x: Int, y: Int, w: Int, h: Int, rot: Int): Pair<Float, Float> {
+        val fx = x.toFloat() / w
+        val fy = y.toFloat() / h
+        return when (rot) {
+            90 -> Pair(1f - fy, fx)
+            180 -> Pair(1f - fx, 1f - fy)
+            270 -> Pair(fy, 1f - fx)
+            else -> Pair(fx, fy)
+        }
+    }
+
+    private fun atualizarStatus() {
+        statusText.text = "Tiros: $contadorTiros"
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        analysisExecutor.shutdown()
+    }
+}
