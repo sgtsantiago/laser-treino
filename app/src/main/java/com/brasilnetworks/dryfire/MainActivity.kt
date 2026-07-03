@@ -172,7 +172,7 @@ class MainActivity : AppCompatActivity() {
         btnStart.visibility = View.VISIBLE
         btnPause.visibility = View.GONE
         telaDestaque.visibility = View.GONE
-        statusText.text = "Calibre o alvo e aperte START"
+        statusText.text = "Calibre o alvo | Brilho: --"
     }
 
     private fun aoApertarStart() {
@@ -282,7 +282,6 @@ class MainActivity : AppCompatActivity() {
                 this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis
             )
 
-            // exposição no mínimo: imagem escura, laser vira o único ponto claro
             val range = camera.cameraInfo.exposureState.exposureCompensationRange
             if (range.lower != range.upper) {
                 camera.cameraControl.setExposureCompensationIndex(range.lower)
@@ -308,6 +307,14 @@ class MainActivity : AppCompatActivity() {
                 plane.buffer, imageProxy.width, imageProxy.height, plane.rowStride,
                 roiImagem
             )
+
+            // DIAGNÓSTICO: durante a calibração, mostra o brilho máximo ao vivo
+            if (estado == Estado.CALIBRANDO) {
+                val brilho = detector.ultimoBrilhoMax.toInt()
+                runOnUiThread {
+                    statusText.text = "Calibre o alvo | Brilho: $brilho"
+                }
+            }
 
             if (resultado != null) {
                 val px = resultado.x.toFloat()
