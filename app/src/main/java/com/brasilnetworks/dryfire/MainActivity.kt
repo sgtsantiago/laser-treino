@@ -12,6 +12,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -43,6 +44,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var telaDestaque: LinearLayout
     private lateinit var txtGrande: TextView
     private lateinit var txtDetalhe: TextView
+    private lateinit var lblSensibilidade: TextView
+    private lateinit var barraSensibilidade: SeekBar
 
     private val detector = LaserDetector()
     private val analysisExecutor = Executors.newSingleThreadExecutor()
@@ -98,8 +101,22 @@ class MainActivity : AppCompatActivity() {
         telaDestaque = findViewById(R.id.telaDestaque)
         txtGrande = findViewById(R.id.txtDestaqueGrande)
         txtDetalhe = findViewById(R.id.txtDestaqueDetalhe)
+        lblSensibilidade = findViewById(R.id.lblSensibilidade)
+        barraSensibilidade = findViewById(R.id.barraSensibilidade)
 
         playerTiro = MediaPlayer.create(this, R.raw.gunshot)
+
+        // sensibilidade inicial
+        detector.definirSensibilidade(barraSensibilidade.progress)
+        lblSensibilidade.text = "Sensibilidade: ${barraSensibilidade.progress}"
+        barraSensibilidade.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, valor: Int, doUsuario: Boolean) {
+                detector.definirSensibilidade(valor)
+                lblSensibilidade.text = "Sensibilidade: $valor"
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
 
         findViewById<Button>(R.id.btnDisparosMais).setOnClickListener {
             edtDisparos.setText((lerInt(edtDisparos, 10) + 1).toString())
