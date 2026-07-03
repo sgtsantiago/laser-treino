@@ -9,28 +9,37 @@ import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import java.nio.ByteBuffer
 
+/**
+ * Detecta o laser por CONTRASTE LOCAL (tophat), não por brilho absoluto.
+ * O laser é um ponto muito mais claro que a vizinhança imediata dele,
+ * então funciona igual em fundo claro ou escuro.
+ */
 class LaserDetector {
 
     data class Resultado(val x: Int, val y: Int, val pixels: Int)
 
-    // último brilho máximo medido (para o diagnóstico)
+    // quanto o laser "se destaca" do fundo ao redor (para diagnóstico)
     @Volatile var ultimoBrilhoMax = 0.0
         private set
 
-    private var brilhoMinimo = 120.0
+    // limiar de destaque (contraste) para valer como laser
+    private var contrasteMinimo = 60.0
 
     private var opencvOk = false
     private var matRgba: Mat? = null
     private var matGray: Mat? = null
-    private var bufferDados: ByteArray? = null
+    private var matTophat: Mat? = null
+    private var kernel: Mat? = null
 
     init {
         opencvOk = OpenCVLoader.initLocal()
     }
 
+    /** 0 = menos sensível (exige contraste alto) ... 100 = mais sensível. */
     fun definirSensibilidade(nivel: Int) {
         val n = nivel.coerceIn(0, 100)
-        brilhoMinimo = (220 - n * 1.4).coerceIn(80.0, 220.0)
+        // nível 0 -> exige contraste 110 ; nível 100 -> exige contraste 30
+        contrasteMinimo = (110 - n * 0.8).coerceIn(30.0, 110.0)
     }
 
     fun analisar(
@@ -44,12 +53,15 @@ class LaserDetector {
 
         val rgba = matRgba ?: Mat(altura, largura, CvType.CV_8UC4).also { matRgba = it }
         val gray = matGray ?: Mat().also { matGray = it }
+        val tophat = matTophat ?: Mat().also { matTophat = it }
+        val k = kernel ?: Imgproc.getStructuringElement(
+            Imgproc.MORPH_ELLIPSE, Size(15.0, 15.0)
+        ).also { kernel = it }
 
         buffer.rewind()
         if (rowStride == largura * 4) {
-            val tam = altura * largura * 4
-            val dados = bufferDados?.takeIf { it.size == tam }
-                ?: ByteArray(tam).also { bufferDados = it }
+            // (sem uso de cache aqui para simplificar; cópia direta)
+            val dados = ByteArray(altura * largura * 4)
             buffer.get(dados)
             rgba.put(0, 0, dados)
         } else {
@@ -66,7 +78,7 @@ class LaserDetector {
         val area: Mat = if (roi != null &&
             roi.left >= 0 && roi.top >= 0 &&
             roi.right <= largura && roi.bottom <= altura &&
-            roi.width() > 8 && roi.height() > 8
+            roi.width() > 16 && roi.height() > 16
         ) {
             offsetX = roi.left
             offsetY = roi.top
@@ -76,12 +88,15 @@ class LaserDetector {
         }
 
         Imgproc.cvtColor(area, gray, Imgproc.COLOR_RGBA2GRAY)
-        Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
 
-        val mm = Core.minMaxLoc(gray)
-        ultimoBrilhoMax = mm.maxVal   // guarda para o diagnóstico
+        // TOPHAT = imagem - abertura(imagem) => realça pontos claros pequenos
+        // (o laser) e apaga o fundo, seja ele claro ou escuro.
+        Imgproc.morphologyEx(gray, tophat, Imgproc.MORPH_TOPHAT, k)
 
-        if (mm.maxVal >= brilhoMinimo) {
+        val mm = Core.minMaxLoc(tophat)
+        ultimoBrilhoMax = mm.maxVal   // agora isto é o "contraste" do pico
+
+        if (mm.maxVal >= contrasteMinimo) {
             return Resultado(
                 mm.maxLoc.x.toInt() + offsetX,
                 mm.maxLoc.y.toInt() + offsetY,
