@@ -2,12 +2,14 @@ package com.brasilnetworks.dryfire
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Rect
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Size
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
@@ -20,6 +22,8 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.camera.view.TransformExperimental
@@ -28,6 +32,8 @@ import androidx.camera.view.transform.ImageProxyTransformFactory
 import androidx.camera.view.transform.OutputTransform
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
+import kotlin.math.abs
+import kotlin.math.hypot
 
 class MainActivity : AppCompatActivity() {
 
@@ -65,6 +71,11 @@ class MainActivity : AppCompatActivity() {
 
     private var laserPresenteAntes = false
     private var ultimoTiroMs = 0L
+
+    // ROI (região do alvo) em coordenadas da imagem de análise
+    @Volatile
+    private var roiImagem: Rect? = null
+    private var framesAteRoi = 0
 
     private val checaTempo = object : Runnable {
         override fun run() {
@@ -106,7 +117,6 @@ class MainActivity : AppCompatActivity() {
 
         playerTiro = MediaPlayer.create(this, R.raw.gunshot)
 
-        // sensibilidade inicial
         detector.definirSensibilidade(barraSensibilidade.progress)
         lblSensibilidade.text = "Sensibilidade: ${barraSensibilidade.progress}"
         barraSensibilidade.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -252,6 +262,16 @@ class MainActivity : AppCompatActivity() {
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                .setResolutionSelector(
+                    ResolutionSelector.Builder()
+                        .setResolutionStrategy(
+                            ResolutionStrategy(
+                                Size(640, 480),
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER
+                            )
+                        )
+                        .build()
+                )
                 .build()
 
             analysis.setAnalyzer(analysisExecutor) { imageProxy ->
@@ -259,18 +279,36 @@ class MainActivity : AppCompatActivity() {
             }
 
             cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(
+            val camera = cameraProvider.bindToLifecycle(
                 this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis
             )
+
+            // exposição no mínimo: imagem escura, laser vira o único ponto claro
+            val range = camera.cameraInfo.exposureState.exposureCompensationRange
+            if (!range.isEmpty) {
+                camera.cameraControl.setExposureCompensationIndex(range.lower)
+            }
         }, ContextCompat.getMainExecutor(this))
     }
 
     @androidx.annotation.OptIn(TransformExperimental::class)
     private fun processarFrame(imageProxy: ImageProxy) {
         try {
+            // atualiza a região do alvo (ROI) a cada ~30 frames (~1s)
+            if (framesAteRoi <= 0) {
+                framesAteRoi = 30
+                val origemRoi = ImageProxyTransformFactory().getOutputTransform(imageProxy)
+                val wImg = imageProxy.width
+                val hImg = imageProxy.height
+                runOnUiThread { atualizarRoi(origemRoi, wImg, hImg) }
+            } else {
+                framesAteRoi--
+            }
+
             val plane = imageProxy.planes[0]
             val resultado = detector.analisar(
-                plane.buffer, imageProxy.width, imageProxy.height, plane.rowStride
+                plane.buffer, imageProxy.width, imageProxy.height, plane.rowStride,
+                roiImagem
             )
 
             if (resultado != null) {
@@ -309,6 +347,52 @@ class MainActivity : AppCompatActivity() {
         } finally {
             imageProxy.close()
         }
+    }
+
+    /**
+     * Converte o círculo do alvo (coordenadas da tela) para um retângulo
+     * na imagem de análise, com 40% de folga. Isso define a região que o
+     * detector vai analisar (todo o resto é descartado).
+     */
+    @androidx.annotation.OptIn(TransformExperimental::class)
+    private fun atualizarRoi(origem: OutputTransform, wImg: Int, hImg: Int) {
+        val destino = previewView.outputTransform ?: return
+        val t = CoordinateTransform(origem, destino)
+
+        // mapeia 3 cantos da imagem para a tela e deriva a transformação afim
+        val p = floatArrayOf(0f, 0f, wImg.toFloat(), 0f, 0f, hImg.toFloat())
+        t.mapPoints(p)
+        val q0x = p[0]; val q0y = p[1]
+        val ax = (p[2] - q0x) / wImg
+        val ay = (p[3] - q0y) / wImg
+        val bx = (p[4] - q0x) / hImg
+        val by = (p[5] - q0y) / hImg
+        val det = ax * by - bx * ay
+        if (abs(det) < 1e-6f) return
+
+        // inverte: tela -> imagem
+        fun paraImagem(vx: Float, vy: Float): Pair<Float, Float> {
+            val ux = vx - q0x
+            val uy = vy - q0y
+            val x = (ux * by - bx * uy) / det
+            val y = (ax * uy - ux * ay) / det
+            return Pair(x, y)
+        }
+
+        val cx = overlay.alvoCentroX()
+        val cy = overlay.alvoCentroY()
+        val r = overlay.alvoRaioPx() * 1.4f   // 40% de folga
+
+        val (icx, icy) = paraImagem(cx, cy)
+        val (ibx, iby) = paraImagem(cx + r, cy)
+        val ir = hypot(ibx - icx, iby - icy)
+
+        val left = (icx - ir).toInt().coerceIn(0, wImg - 2)
+        val top = (icy - ir).toInt().coerceIn(0, hImg - 2)
+        val right = (icx + ir).toInt().coerceIn(left + 1, wImg)
+        val bottom = (icy + ir).toInt().coerceIn(top + 1, hImg)
+
+        roiImagem = Rect(left, top, right, bottom)
     }
 
     private fun lerInt(edt: EditText, padrao: Int): Int {
