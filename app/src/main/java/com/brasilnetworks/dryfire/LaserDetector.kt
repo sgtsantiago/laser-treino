@@ -1,5 +1,6 @@
 package com.brasilnetworks.dryfire
 
+import android.graphics.Rect
 import org.opencv.android.OpenCVLoader
 import org.opencv.core.Core
 import org.opencv.core.CvType
@@ -9,44 +10,47 @@ import org.opencv.imgproc.Imgproc
 import java.nio.ByteBuffer
 
 /**
- * Detecta o PULSO do laser comparando cada frame com o anterior.
- * O que "acende de repente" e é pontual = disparo. Coisas paradas
- * (parede, reflexos, luzes) não geram diferença e são ignoradas.
+ * Analisa SOMENTE a região do alvo (ROI). Com a exposição escura e o
+ * recorte, o laser é o único ponto brilhante possível na área analisada.
  */
 class LaserDetector {
 
     data class Resultado(val x: Int, val y: Int, val pixels: Int)
 
-    // quanto o ponto precisa "acender" em relação ao frame anterior (0..255)
-    private var deltaMinimo = 60.0
+    private var brilhoMinimo = 120.0
 
     private var opencvOk = false
     private var matRgba: Mat? = null
     private var matGray: Mat? = null
-    private var matAnterior: Mat? = null
-    private var matDiff: Mat? = null
+    private var bufferDados: ByteArray? = null
 
     init {
         opencvOk = OpenCVLoader.initLocal()
     }
 
-    /** 0 = menos sensível (exige flash forte) ... 100 = mais sensível (flash fraco). */
+    /** 0 = menos sensível ... 100 = mais sensível. */
     fun definirSensibilidade(nivel: Int) {
         val n = nivel.coerceIn(0, 100)
-        deltaMinimo = (120 - n * 0.9).coerceIn(30.0, 120.0)
+        brilhoMinimo = (220 - n * 1.4).coerceIn(80.0, 220.0)
     }
 
-    fun analisar(buffer: ByteBuffer, largura: Int, altura: Int, rowStride: Int): Resultado? {
+    fun analisar(
+        buffer: ByteBuffer,
+        largura: Int,
+        altura: Int,
+        rowStride: Int,
+        roi: Rect? = null
+    ): Resultado? {
         if (!opencvOk) return null
 
         val rgba = matRgba ?: Mat(altura, largura, CvType.CV_8UC4).also { matRgba = it }
         val gray = matGray ?: Mat().also { matGray = it }
-        val diff = matDiff ?: Mat().also { matDiff = it }
 
-        // copia o frame da câmera para o OpenCV
         buffer.rewind()
         if (rowStride == largura * 4) {
-            val dados = ByteArray(altura * largura * 4)
+            val tam = altura * largura * 4
+            val dados = bufferDados?.takeIf { it.size == tam }
+                ?: ByteArray(tam).also { bufferDados = it }
             buffer.get(dados)
             rgba.put(0, 0, dados)
         } else {
@@ -58,33 +62,33 @@ class LaserDetector {
             }
         }
 
-        // escala de cinza + leve desfoque (estabiliza o ruído)
-        Imgproc.cvtColor(rgba, gray, Imgproc.COLOR_RGBA2GRAY)
-        Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
-
-        // primeiro frame: só guarda como referência
-        val anterior = matAnterior
-        if (anterior == null) {
-            matAnterior = gray.clone()
-            return null
+        // recorta só a região do alvo (se definida e válida)
+        var offsetX = 0
+        var offsetY = 0
+        val area: Mat = if (roi != null &&
+            roi.left >= 0 && roi.top >= 0 &&
+            roi.right <= largura && roi.bottom <= altura &&
+            roi.width() > 8 && roi.height() > 8
+        ) {
+            offsetX = roi.left
+            offsetY = roi.top
+            rgba.submat(
+                org.opencv.core.Rect(roi.left, roi.top, roi.width(), roi.height())
+            )
+        } else {
+            rgba
         }
 
-        // o que ficou MAIS CLARO em relação ao frame anterior
-        Core.subtract(gray, anterior, diff)
+        Imgproc.cvtColor(area, gray, Imgproc.COLOR_RGBA2GRAY)
+        Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
 
-        // atualiza a referência para o próximo ciclo
-        gray.copyTo(anterior)
-
-        // maior "acendimento" da cena
-        val mm = Core.minMaxLoc(diff)
-        if (mm.maxVal >= deltaMinimo) {
-            val x = mm.maxLoc.x.toInt()
-            val y = mm.maxLoc.y.toInt()
-            // confirma que o ponto está de fato claro no frame atual (evita ruído)
-            val brilho = gray.get(y, x)
-            if (brilho != null && brilho[0] >= 150.0) {
-                return Resultado(x, y, 1)
-            }
+        val mm = Core.minMaxLoc(gray)
+        if (mm.maxVal >= brilhoMinimo) {
+            return Resultado(
+                mm.maxLoc.x.toInt() + offsetX,
+                mm.maxLoc.y.toInt() + offsetY,
+                1
+            )
         }
         return null
     }
