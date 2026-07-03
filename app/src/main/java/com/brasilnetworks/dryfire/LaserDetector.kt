@@ -6,16 +6,33 @@ class LaserDetector {
 
     data class Resultado(val x: Int, val y: Int, val pixels: Int)
 
-    var limiarVermelho = 200
-    var margem = 50
-    var minPixels = 4
+    var limiarVermelho = 170
+    var margem = 35
+    var minPixels = 1
+
+    /**
+     * Ajusta a sensibilidade de 0 (menos sensível) a 100 (mais sensível).
+     * Mais sensível = detecta pontos menores e mais fracos (mira de longe).
+     */
+    fun definirSensibilidade(nivel: Int) {
+        val n = nivel.coerceIn(0, 100)
+        // quanto maior o nível, menores os limiares e o mínimo de pixels
+        limiarVermelho = (220 - (n * 0.9).toInt()).coerceIn(120, 220)  // 220..130
+        margem = (60 - (n * 0.4).toInt()).coerceIn(20, 60)            // 60..20
+        minPixels = when {
+            n >= 80 -> 1
+            n >= 50 -> 2
+            n >= 25 -> 3
+            else -> 5
+        }
+    }
 
     fun analisar(buffer: ByteBuffer, largura: Int, altura: Int, rowStride: Int): Resultado? {
         var somaX = 0L
         var somaY = 0L
         var contagem = 0
 
-        val passo = 2
+        val passo = 1
 
         var y = 0
         while (y < altura) {
