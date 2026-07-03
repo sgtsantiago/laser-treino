@@ -379,7 +379,7 @@ class MainActivity : AppCompatActivity() {
 
         val cx = overlay.alvoCentroX()
         val cy = overlay.alvoCentroY()
-        val r = overlay.alvoRaioPx() * 1.4f
+        val r = overlay.alvoRaioPx() * 1.2f
 
         val (icx, icy) = paraImagem(cx, cy)
         val (ibx, iby) = paraImagem(cx + r, cy)
