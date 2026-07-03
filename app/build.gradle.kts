@@ -35,4 +35,6 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$camerax")
     implementation("androidx.camera:camera-view:$camerax")
     implementation("androidx.camera:camera-mlkit-vision:1.5.1")
+
+    implementation("org.opencv:opencv:4.12.0")
 }
