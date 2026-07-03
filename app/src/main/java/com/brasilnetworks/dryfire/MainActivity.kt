@@ -72,7 +72,6 @@ class MainActivity : AppCompatActivity() {
     private var laserPresenteAntes = false
     private var ultimoTiroMs = 0L
 
-    // ROI (região do alvo) em coordenadas da imagem de análise
     @Volatile
     private var roiImagem: Rect? = null
     private var framesAteRoi = 0
@@ -285,7 +284,7 @@ class MainActivity : AppCompatActivity() {
 
             // exposição no mínimo: imagem escura, laser vira o único ponto claro
             val range = camera.cameraInfo.exposureState.exposureCompensationRange
-            if (!range.isEmpty) {
+            if (range.lower != range.upper) {
                 camera.cameraControl.setExposureCompensationIndex(range.lower)
             }
         }, ContextCompat.getMainExecutor(this))
@@ -294,7 +293,6 @@ class MainActivity : AppCompatActivity() {
     @androidx.annotation.OptIn(TransformExperimental::class)
     private fun processarFrame(imageProxy: ImageProxy) {
         try {
-            // atualiza a região do alvo (ROI) a cada ~30 frames (~1s)
             if (framesAteRoi <= 0) {
                 framesAteRoi = 30
                 val origemRoi = ImageProxyTransformFactory().getOutputTransform(imageProxy)
@@ -349,17 +347,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Converte o círculo do alvo (coordenadas da tela) para um retângulo
-     * na imagem de análise, com 40% de folga. Isso define a região que o
-     * detector vai analisar (todo o resto é descartado).
-     */
     @androidx.annotation.OptIn(TransformExperimental::class)
     private fun atualizarRoi(origem: OutputTransform, wImg: Int, hImg: Int) {
         val destino = previewView.outputTransform ?: return
         val t = CoordinateTransform(origem, destino)
 
-        // mapeia 3 cantos da imagem para a tela e deriva a transformação afim
         val p = floatArrayOf(0f, 0f, wImg.toFloat(), 0f, 0f, hImg.toFloat())
         t.mapPoints(p)
         val q0x = p[0]; val q0y = p[1]
@@ -370,7 +362,6 @@ class MainActivity : AppCompatActivity() {
         val det = ax * by - bx * ay
         if (abs(det) < 1e-6f) return
 
-        // inverte: tela -> imagem
         fun paraImagem(vx: Float, vy: Float): Pair<Float, Float> {
             val ux = vx - q0x
             val uy = vy - q0y
@@ -381,7 +372,7 @@ class MainActivity : AppCompatActivity() {
 
         val cx = overlay.alvoCentroX()
         val cy = overlay.alvoCentroY()
-        val r = overlay.alvoRaioPx() * 1.4f   // 40% de folga
+        val r = overlay.alvoRaioPx() * 1.4f
 
         val (icx, icy) = paraImagem(cx, cy)
         val (ibx, iby) = paraImagem(cx + r, cy)
