@@ -117,6 +117,22 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/lblSensibilidade"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="4dp"
+            android:text="Sensibilidade: 80"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+
+        <SeekBar
+            android:id="@+id/barraSensibilidade"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="80" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
