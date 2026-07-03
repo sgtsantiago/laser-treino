@@ -9,13 +9,13 @@ import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import java.nio.ByteBuffer
 
-/**
- * Analisa SOMENTE a região do alvo (ROI). Com a exposição escura e o
- * recorte, o laser é o único ponto brilhante possível na área analisada.
- */
 class LaserDetector {
 
     data class Resultado(val x: Int, val y: Int, val pixels: Int)
+
+    // último brilho máximo medido (para o diagnóstico)
+    @Volatile var ultimoBrilhoMax = 0.0
+        private set
 
     private var brilhoMinimo = 120.0
 
@@ -28,7 +28,6 @@ class LaserDetector {
         opencvOk = OpenCVLoader.initLocal()
     }
 
-    /** 0 = menos sensível ... 100 = mais sensível. */
     fun definirSensibilidade(nivel: Int) {
         val n = nivel.coerceIn(0, 100)
         brilhoMinimo = (220 - n * 1.4).coerceIn(80.0, 220.0)
@@ -62,7 +61,6 @@ class LaserDetector {
             }
         }
 
-        // recorta só a região do alvo (se definida e válida)
         var offsetX = 0
         var offsetY = 0
         val area: Mat = if (roi != null &&
@@ -72,9 +70,7 @@ class LaserDetector {
         ) {
             offsetX = roi.left
             offsetY = roi.top
-            rgba.submat(
-                org.opencv.core.Rect(roi.left, roi.top, roi.width(), roi.height())
-            )
+            rgba.submat(org.opencv.core.Rect(roi.left, roi.top, roi.width(), roi.height()))
         } else {
             rgba
         }
@@ -83,6 +79,8 @@ class LaserDetector {
         Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
 
         val mm = Core.minMaxLoc(gray)
+        ultimoBrilhoMax = mm.maxVal   // guarda para o diagnóstico
+
         if (mm.maxVal >= brilhoMinimo) {
             return Resultado(
                 mm.maxLoc.x.toInt() + offsetX,
