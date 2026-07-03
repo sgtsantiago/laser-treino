@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -34,6 +33,11 @@ class OverlayView @JvmOverloads constructor(
 
     private val fatorZonaMedia = 0.62f
     private val fatorZonaCentral = 0.30f
+
+    // ----- posição do alvo para o recorte (ROI) -----
+    fun alvoCentroX() = alvoCx
+    fun alvoCentroY() = alvoCy
+    fun alvoRaioPx() = alvoRaio
 
     private val paintZonaExterna = Paint().apply {
         color = Color.parseColor("#5532C8FF"); style = Paint.Style.FILL; isAntiAlias = true
@@ -149,11 +153,7 @@ class OverlayView @JvmOverloads constructor(
     }
 
     private fun calcularPontos(x: Float, y: Float): Int {
-        val larguraMeia = alvoRaio
-        val alturaMeia = alvoRaio * 1.5f
-        val dx = (x - alvoCx) / larguraMeia
-        val dy = (y - alvoCy) / alturaMeia
-        val d = hypot(dx, dy)
+        val d = hypot(x - alvoCx, y - alvoCy) / alvoRaio
         return when {
             d <= fatorZonaCentral -> 5
             d <= fatorZonaMedia -> 3
@@ -166,15 +166,14 @@ class OverlayView @JvmOverloads constructor(
         super.onDraw(canvas)
         if (!inicializado) return
 
-        val lm = alvoRaio
-        val am = alvoRaio * 1.5f
+        val r = alvoRaio
 
-        canvas.drawOval(retangulo(lm, am), paintZonaExterna)
-        canvas.drawOval(retangulo(lm, am), paintContorno)
-        canvas.drawOval(retangulo(lm * fatorZonaMedia, am * fatorZonaMedia), paintZonaMedia)
-        canvas.drawOval(retangulo(lm * fatorZonaMedia, am * fatorZonaMedia), paintContorno)
-        canvas.drawOval(retangulo(lm * fatorZonaCentral, am * fatorZonaCentral), paintZonaCentral)
-        canvas.drawOval(retangulo(lm * fatorZonaCentral, am * fatorZonaCentral), paintContorno)
+        canvas.drawCircle(alvoCx, alvoCy, r, paintZonaExterna)
+        canvas.drawCircle(alvoCx, alvoCy, r, paintContorno)
+        canvas.drawCircle(alvoCx, alvoCy, r * fatorZonaMedia, paintZonaMedia)
+        canvas.drawCircle(alvoCx, alvoCy, r * fatorZonaMedia, paintContorno)
+        canvas.drawCircle(alvoCx, alvoCy, r * fatorZonaCentral, paintZonaCentral)
+        canvas.drawCircle(alvoCx, alvoCy, r * fatorZonaCentral, paintContorno)
 
         for (t in tiros) {
             canvas.drawCircle(t.x, t.y, 10f, paintTiro)
@@ -187,7 +186,4 @@ class OverlayView @JvmOverloads constructor(
             canvas.drawLine(cx, cy - 30f, cx, cy + 30f, paintLaser)
         }
     }
-
-    private fun retangulo(lm: Float, am: Float) =
-        RectF(alvoCx - lm, alvoCy - am, alvoCx + lm, alvoCy + am)
 }
